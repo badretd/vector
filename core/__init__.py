@@ -1,0 +1,1 @@
+"""Core logic: audio capture, speech recognition, LLM streaming."""
