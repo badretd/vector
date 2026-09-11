@@ -95,3 +95,23 @@ def make_mic_pixmap(size=128, crossed=False):
 
     p.end()
     return pixmap
+
+def make_settings_pixmap(size=128):
+    """Render a simple hamburger icon used for the settings menu button."""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    p = QPainter(pixmap)
+    p.setRenderHint(QPainter.Antialiasing, True)
+
+    pen = QPen(Qt.white)
+    pen.setWidthF(size * 0.10)
+    pen.setCapStyle(Qt.RoundCap)
+    p.setPen(pen)
+
+    margin = size * 0.22
+    for i in range(3):
+        y = size * (0.30 + i * 0.20)
+        p.drawLine(QPointF(margin, y), QPointF(size - margin, y))
+
+    p.end()
+    return pixmap

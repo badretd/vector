@@ -38,6 +38,14 @@ TEXTS = {
         "no": "No",
         "error": "Error",
         "setup_cancelled": "Setup cancelled.",
+
+        # --- main window ---
+        "placeholder_subtitle": "Start speaking",
+        "send_hint": "Press Enter to send the text",
+        "settings_tooltip": "Settings",
+        "settings_send_mode_header": "Send mode",
+        "settings_send_enter": "Send by Enter",
+        "settings_send_timer": "Send by timer (3 sec)",
     },
     "ru": {
         "app_title": "Vector Voice",
@@ -75,6 +83,14 @@ TEXTS = {
         "no": "Нет",
         "error": "Ошибка",
         "setup_cancelled": "Настройка отменена.",
+
+        # --- main window ---
+        "placeholder_subtitle": "Начни говорить",
+        "send_hint": "Нажми Enter чтобы отправить текст",
+        "settings_tooltip": "Настройки",
+        "settings_send_mode_header": "Способ отправки",
+        "settings_send_enter": "Отправка по Enter",
+        "settings_send_timer": "Отправка по таймеру (3 сек)",
     },
 }
 

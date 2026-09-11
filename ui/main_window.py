@@ -1,8 +1,11 @@
 """Main window: emotion sprite, text area, click-anywhere mic toggle."""
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont, QPixmap
+from PyQt5.QtGui import QCursor, QFont, QPixmap
 from PyQt5.QtWidgets import (
+    QAction,
+    QActionGroup,
     QLabel,
+    QMenu,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -10,30 +13,40 @@ from PyQt5.QtWidgets import (
 
 from config import (
     EMOTION_DISPLAY_SIZE,
+    HINT_FONT_SIZE,
     NORMAL_FONT_SIZE,
     PLACEHOLDER_FONT_SIZE,
     PLACEHOLDER_TEXT,
     PLACEHOLDER_TIMEOUT,
+    SEND_HINT_TIMEOUT,
+    SETTINGS_ICON_SIZE,
     SILENCE_TIMEOUT,
     STYLE_WHITE,
     STYLE_YELLOW,
+    SUBTITLE_FONT_SIZE,
 )
+from core.i18n import t
 from core.llm_thread import LLMThread
 from core.speech_thread import SpeechThread
-from ui.assets import load_emotion_pixmaps, make_mic_pixmap
+from ui.assets import load_emotion_pixmaps, make_mic_pixmap, make_settings_pixmap
+from ui.widgets import ClickableLabel
 
 
 class VoiceWindow(QWidget):
     MIC_ICON_SIZE = 96
 
-    def __init__(self, device_index):
+    def __init__(self, device_index, settings):
         super().__init__()
-        self.setWindowTitle("Vector Voice")
+        self.settings = settings
+
+        self.setWindowTitle(t("app_title"))
         self.resize(900, 560)
         self.setStyleSheet("background-color: #000000;")
+        self.setFocusPolicy(Qt.StrongFocus)
 
         self.placeholder_active = True
         self.recognition_enabled = True
+        self.hint_visible = False
 
         self.current_user_text = ""
         self.llm_response_text = ""
@@ -51,13 +64,13 @@ class VoiceWindow(QWidget):
         self.emotion_label.setPixmap(QPixmap())
 
         # --- center: text ---
-        self.text_label = QLabel(PLACEHOLDER_TEXT, self)
+        self.text_label = QLabel(self)
         self.text_label.setAlignment(Qt.AlignCenter)
         self.text_label.setWordWrap(True)
-        self.text_label.setFont(QFont("Arial", PLACEHOLDER_FONT_SIZE))
         self.text_label.setStyleSheet(STYLE_WHITE)
         self.text_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.text_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self._show_placeholder()
 
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(30, 15, 30, 30)
@@ -66,7 +79,7 @@ class VoiceWindow(QWidget):
         main_layout.addWidget(self.text_label, stretch=1)
         self.setLayout(main_layout)
 
-        # --- mic overlay (absolute-positioned, outside layout) ---
+        # --- microphone overlay (bottom center, visible when mic is OFF) ---
         self.mic_pixmap_crossed = make_mic_pixmap(128, crossed=True).scaled(
             self.MIC_ICON_SIZE, self.MIC_ICON_SIZE,
             Qt.KeepAspectRatio, Qt.SmoothTransformation,
@@ -76,9 +89,34 @@ class VoiceWindow(QWidget):
         self.mic_label.setAlignment(Qt.AlignCenter)
         self.mic_label.setStyleSheet("background-color: transparent;")
         self.mic_label.setFixedSize(self.MIC_ICON_SIZE, self.MIC_ICON_SIZE)
-        # Clicks on the icon fall through to the window and toggle the mic.
         self.mic_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.mic_label.setVisible(False)          # hidden while mic is ON
+        self.mic_label.setVisible(False)
+
+        # --- settings icon (top-right, visible when mic is OFF) ---
+        settings_pixmap = make_settings_pixmap(128).scaled(
+            SETTINGS_ICON_SIZE, SETTINGS_ICON_SIZE,
+            Qt.KeepAspectRatio, Qt.SmoothTransformation,
+        )
+        self.settings_icon = ClickableLabel(self)
+        self.settings_icon.setPixmap(settings_pixmap)
+        self.settings_icon.setAlignment(Qt.AlignCenter)
+        self.settings_icon.setStyleSheet("background-color: transparent;")
+        self.settings_icon.setFixedSize(SETTINGS_ICON_SIZE, SETTINGS_ICON_SIZE)
+        self.settings_icon.setToolTip(t("settings_tooltip"))
+        self.settings_icon.clicked.connect(self.open_settings_menu)
+        self.settings_icon.setVisible(False)
+
+        # --- send hint (overlaid near the bottom) ---
+        self.hint_label = QLabel(self)
+        self.hint_label.setAlignment(Qt.AlignCenter)
+        self.hint_label.setFont(QFont("Arial", HINT_FONT_SIZE))
+        self.hint_label.setStyleSheet(
+            "color: #ffcc00; background-color: transparent; padding: 6px;"
+        )
+        self.hint_label.setText(t("send_hint"))
+        self.hint_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.hint_label.adjustSize()
+        self.hint_label.setVisible(False)
 
         # --- timers ---
         self.silence_timer = QTimer(self)
@@ -90,18 +128,48 @@ class VoiceWindow(QWidget):
         self.placeholder_timer.timeout.connect(self.clear_placeholder)
         self.placeholder_timer.start(PLACEHOLDER_TIMEOUT)
 
+        self.hint_timer = QTimer(self)
+        self.hint_timer.setSingleShot(True)
+        self.hint_timer.timeout.connect(self.hide_hint)
+
         # --- recognition ---
         self.speech_thread = SpeechThread(device_index)
         self.speech_thread.text_recognized.connect(self.update_text)
         self.speech_thread.start()
 
+    # ---------- placeholder ----------
+
+    def _show_placeholder(self):
+        self.text_label.setTextFormat(Qt.RichText)
+        self.text_label.setText(
+            f'<div style="font-size: {PLACEHOLDER_FONT_SIZE}pt;">'
+            f'{PLACEHOLDER_TEXT}</div>'
+            f'<div style="font-size: {SUBTITLE_FONT_SIZE}pt; color: #888888;">'
+            f'{t("placeholder_subtitle")}</div>'
+        )
+
     # ---------- overlay positioning ----------
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._reposition_overlays()
+
+    def _reposition_overlays(self):
+        # Mic icon: bottom center.
         x = (self.width() - self.mic_label.width()) // 2
         y = self.height() - self.mic_label.height() - 20
         self.mic_label.move(x, y)
+
+        # Settings icon: top-right corner.
+        sx = self.width() - self.settings_icon.width() - 20
+        sy = 20
+        self.settings_icon.move(sx, sy)
+
+        # Hint: bottom center, just above the mic icon.
+        self.hint_label.adjustSize()
+        hx = (self.width() - self.hint_label.width()) // 2
+        hy = self.height() - self.hint_label.height() - 40
+        self.hint_label.move(hx, hy)
 
     # ---------- click anywhere toggles the mic ----------
 
@@ -110,11 +178,31 @@ class VoiceWindow(QWidget):
             self.on_mic_click()
         super().mousePressEvent(event)
 
-    # ---------- placeholder ----------
+    # ---------- Enter key ----------
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            self.on_enter_pressed()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def on_enter_pressed(self):
+        self.hide_hint()
+        self.silence_timer.stop()
+        text = self.current_user_text.strip()
+        if not text or self.generating:
+            return
+        self.current_user_text = ""
+        self.speech_thread.reset()
+        self.start_generation(text)
+
+    # ---------- placeholder lifecycle ----------
 
     def clear_placeholder(self):
         if self.placeholder_active:
             self.placeholder_active = False
+            self.text_label.setTextFormat(Qt.PlainText)
             self.text_label.clear()
             self.text_label.setFont(QFont("Arial", NORMAL_FONT_SIZE))
 
@@ -127,29 +215,50 @@ class VoiceWindow(QWidget):
         if self.placeholder_active:
             self.placeholder_timer.stop()
             self.placeholder_active = False
+            self.text_label.setTextFormat(Qt.PlainText)
             self.text_label.setFont(QFont("Arial", NORMAL_FONT_SIZE))
 
         self._set_emotion("")
         self.llm_response_text = ""
-        # USER text is yellow.
+        # User text is yellow.
         self.text_label.setStyleSheet(STYLE_YELLOW)
         self.text_label.setText(text)
         self.current_user_text = text
 
+        self.hide_hint()
         self.silence_timer.stop()
         self.silence_timer.start(SILENCE_TIMEOUT)
 
     def on_silence(self):
         text = self.current_user_text.strip()
-        self.current_user_text = ""
-
-        self.speech_thread.reset()
-
         if not text:
             self.text_label.clear()
             return
 
-        self.start_generation(text)
+        mode = self.settings.get("send_mode", "enter")
+        if mode == "timer":
+            # Auto-send after the silence timeout.
+            self.current_user_text = ""
+            self.speech_thread.reset()
+            self.start_generation(text)
+        else:
+            # Enter mode: show the hint and wait for the user.
+            self.show_hint()
+
+    # ---------- send hint ----------
+
+    def show_hint(self):
+        self.hint_visible = True
+        self._reposition_overlays()
+        self.hint_label.setVisible(True)
+        self.hint_label.raise_()
+        self.hint_timer.start(SEND_HINT_TIMEOUT)
+
+    def hide_hint(self):
+        self.hint_timer.stop()
+        if self.hint_visible:
+            self.hint_visible = False
+            self.hint_label.setVisible(False)
 
     # ---------- LLM ----------
 
@@ -158,7 +267,7 @@ class VoiceWindow(QWidget):
         self.llm_response_text = ""
 
         self._set_emotion("Thinking")
-        # MODEL answer is white.
+        # Model answer is white.
         self.text_label.setStyleSheet(STYLE_WHITE)
         self.text_label.setText("")
 
@@ -208,9 +317,58 @@ class VoiceWindow(QWidget):
 
     def on_mic_click(self):
         self.recognition_enabled = not self.recognition_enabled
-        # Icon appears only when the mic is OFF.
+        # Icons appear only while the mic is OFF.
         self.mic_label.setVisible(not self.recognition_enabled)
+        self.settings_icon.setVisible(not self.recognition_enabled)
         self.speech_thread.set_enabled(self.recognition_enabled)
+        self.hide_hint()
+
+    # ---------- settings menu ----------
+
+    def open_settings_menu(self):
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            "QMenu {"
+            "  background-color: #1e1e1e;"
+            "  color: #ffffff;"
+            "  border: 1px solid #444444;"
+            "  padding: 4px;"
+            "}"
+            "QMenu::item { padding: 6px 18px; }"
+            "QMenu::item:selected { background-color: #333333; }"
+            "QMenu::item:disabled { color: #888888; }"
+            "QMenu::separator { height: 1px; background: #444444; margin: 4px 8px; }"
+        )
+
+        header = menu.addAction(t("settings_send_mode_header"))
+        header.setEnabled(False)
+        menu.addSeparator()
+
+        group = QActionGroup(menu)
+        group.setExclusive(True)
+
+        current = self.settings.get("send_mode", "enter")
+
+        action_enter = QAction(t("settings_send_enter"), self, checkable=True)
+        action_enter.setChecked(current == "enter")
+        action_enter.triggered.connect(lambda: self.set_send_mode("enter"))
+        group.addAction(action_enter)
+        menu.addAction(action_enter)
+
+        action_timer = QAction(t("settings_send_timer"), self, checkable=True)
+        action_timer.setChecked(current == "timer")
+        action_timer.triggered.connect(lambda: self.set_send_mode("timer"))
+        group.addAction(action_timer)
+        menu.addAction(action_timer)
+
+        menu.exec_(QCursor.pos())
+
+    def set_send_mode(self, mode):
+        self.settings["send_mode"] = mode
+        self.settings.save()
+        self.hide_hint()
+
+    # ---------- close ----------
 
     def closeEvent(self, event):
         self.cancel_llm()

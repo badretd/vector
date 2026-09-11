@@ -47,7 +47,7 @@ def main():
     )
 
     from ui.main_window import VoiceWindow
-    window = VoiceWindow(device_index)
+    window = VoiceWindow(device_index, settings)
     window.show()
     sys.exit(app.exec_())
 

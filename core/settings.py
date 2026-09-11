@@ -11,6 +11,7 @@ DEFAULTS = {
     "vosk_model_dir": "model",
     "ollama_model": None,
     "setup_complete": False,
+    "send_mode": "enter",
 }
 
 
