@@ -1,5 +1,4 @@
 """Background thread that captures microphone audio and feeds it to Vosk."""
-
 import json
 import queue
 import sys
@@ -11,16 +10,13 @@ from PyQt5.QtCore import QThread, pyqtSignal
 from scipy.signal import resample_poly
 from vosk import Model, KaldiRecognizer
 
-from config import CHUNK_SIZE, MODEL_PATH, TARGET_RATE
+import config
+from config import CHUNK_SIZE, TARGET_RATE
 from core.audio_devices import pick_samplerate
 
 
 class SpeechThread(QThread):
-    """Continuously listens on the mic and emits recognized text.
-
-    Emits the *combined* text (final + partial) so the UI can display
-    live feedback while the user is still speaking.
-    """
+    """Continuously listens on the mic and emits recognized text."""
 
     text_recognized = pyqtSignal(str)
 
@@ -38,7 +34,7 @@ class SpeechThread(QThread):
         self.resample_down = 1
 
     def run(self):
-        model = Model(MODEL_PATH)
+        model = Model(config.MODEL_PATH)
         rec = KaldiRecognizer(model, TARGET_RATE)
 
         self.actual_rate = pick_samplerate(self.device_index)
@@ -50,7 +46,7 @@ class SpeechThread(QThread):
             with sd.RawInputStream(
                 samplerate=self.actual_rate,
                 blocksize=CHUNK_SIZE,
-                dtype='int16',
+                dtype="int16",
                 channels=1,
                 device=self.device_index,
                 callback=self._audio_callback,
@@ -92,7 +88,6 @@ class SpeechThread(QThread):
             print(f"Audio error: {e}")
 
     def _audio_callback(self, indata, frames, time, status):
-        """sounddevice callback: runs on PortAudio's thread, not the Qt thread."""
         if status:
             print(status, file=sys.stderr)
 
@@ -105,12 +100,10 @@ class SpeechThread(QThread):
         self.audio_queue.put(raw)
 
     def reset(self):
-        """Clear the accumulated final text without pausing the stream."""
         self._reset_flag = True
         self._need_reset = True
 
     def set_enabled(self, enabled):
-        """Pause / resume recognition without tearing down the audio stream."""
         self._enabled = enabled
         if not enabled:
             self._need_reset = True

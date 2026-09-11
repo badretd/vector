@@ -1,9 +1,7 @@
-"""Main application window: emotion icon, text area, microphone toggle."""
-
+"""Main window: emotion sprite, text area, click-anywhere mic toggle."""
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtWidgets import (
-    QHBoxLayout,
     QLabel,
     QSizePolicy,
     QVBoxLayout,
@@ -23,13 +21,14 @@ from config import (
 from core.llm_thread import LLMThread
 from core.speech_thread import SpeechThread
 from ui.assets import load_emotion_pixmaps, make_mic_pixmap
-from ui.widgets import ClickableLabel
 
 
 class VoiceWindow(QWidget):
+    MIC_ICON_SIZE = 96
+
     def __init__(self, device_index):
         super().__init__()
-        self.setWindowTitle("Voice Text")
+        self.setWindowTitle("Vector Voice")
         self.resize(900, 560)
         self.setStyleSheet("background-color: #000000;")
 
@@ -48,43 +47,40 @@ class VoiceWindow(QWidget):
         self.emotion_label.setAlignment(Qt.AlignCenter)
         self.emotion_label.setStyleSheet("background-color: #000000;")
         self.emotion_label.setFixedHeight(EMOTION_DISPLAY_SIZE + 20)
+        self.emotion_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.emotion_label.setPixmap(QPixmap())
 
-        # --- center: answer text ---
+        # --- center: text ---
         self.text_label = QLabel(PLACEHOLDER_TEXT, self)
         self.text_label.setAlignment(Qt.AlignCenter)
         self.text_label.setWordWrap(True)
         self.text_label.setFont(QFont("Arial", PLACEHOLDER_FONT_SIZE))
         self.text_label.setStyleSheet(STYLE_WHITE)
         self.text_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        # --- bottom: microphone toggle ---
-        self.mic_pixmap_normal = make_mic_pixmap(128, crossed=False).scaled(
-            80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self.mic_pixmap_crossed = make_mic_pixmap(128, crossed=True).scaled(
-            80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-
-        self.mic_label = ClickableLabel(self)
-        self.mic_label.setPixmap(self.mic_pixmap_normal)
-        self.mic_label.setAlignment(Qt.AlignCenter)
-        self.mic_label.setStyleSheet("background-color: #000000;")
-        self.mic_label.setFixedSize(100, 100)
-        self.mic_label.clicked.connect(self.on_mic_click)
+        self.text_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
 
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(30, 15, 30, 30)
         main_layout.setSpacing(10)
         main_layout.addWidget(self.emotion_label, alignment=Qt.AlignHCenter)
         main_layout.addWidget(self.text_label, stretch=1)
-
-        bottom_layout = QHBoxLayout()
-        bottom_layout.addStretch(1)
-        bottom_layout.addWidget(self.mic_label)
-        bottom_layout.addStretch(1)
-        main_layout.addLayout(bottom_layout)
-
         self.setLayout(main_layout)
 
+        # --- mic overlay (absolute-positioned, outside layout) ---
+        self.mic_pixmap_crossed = make_mic_pixmap(128, crossed=True).scaled(
+            self.MIC_ICON_SIZE, self.MIC_ICON_SIZE,
+            Qt.KeepAspectRatio, Qt.SmoothTransformation,
+        )
+        self.mic_label = QLabel(self)
+        self.mic_label.setPixmap(self.mic_pixmap_crossed)
+        self.mic_label.setAlignment(Qt.AlignCenter)
+        self.mic_label.setStyleSheet("background-color: transparent;")
+        self.mic_label.setFixedSize(self.MIC_ICON_SIZE, self.MIC_ICON_SIZE)
+        # Clicks on the icon fall through to the window and toggle the mic.
+        self.mic_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.mic_label.setVisible(False)          # hidden while mic is ON
+
+        # --- timers ---
         self.silence_timer = QTimer(self)
         self.silence_timer.setSingleShot(True)
         self.silence_timer.timeout.connect(self.on_silence)
@@ -94,9 +90,25 @@ class VoiceWindow(QWidget):
         self.placeholder_timer.timeout.connect(self.clear_placeholder)
         self.placeholder_timer.start(PLACEHOLDER_TIMEOUT)
 
+        # --- recognition ---
         self.speech_thread = SpeechThread(device_index)
         self.speech_thread.text_recognized.connect(self.update_text)
         self.speech_thread.start()
+
+    # ---------- overlay positioning ----------
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        x = (self.width() - self.mic_label.width()) // 2
+        y = self.height() - self.mic_label.height() - 20
+        self.mic_label.move(x, y)
+
+    # ---------- click anywhere toggles the mic ----------
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.on_mic_click()
+        super().mousePressEvent(event)
 
     # ---------- placeholder ----------
 
@@ -119,7 +131,8 @@ class VoiceWindow(QWidget):
 
         self._set_emotion("")
         self.llm_response_text = ""
-        self.text_label.setStyleSheet(STYLE_WHITE)
+        # USER text is yellow.
+        self.text_label.setStyleSheet(STYLE_YELLOW)
         self.text_label.setText(text)
         self.current_user_text = text
 
@@ -144,9 +157,9 @@ class VoiceWindow(QWidget):
         self.generating = True
         self.llm_response_text = ""
 
-        # Show "Thinking" while the model warms up and produces the first token.
         self._set_emotion("Thinking")
-        self.text_label.setStyleSheet(STYLE_YELLOW)
+        # MODEL answer is white.
+        self.text_label.setStyleSheet(STYLE_WHITE)
         self.text_label.setText("")
 
         self.llm_thread = LLMThread(prompt)
@@ -182,7 +195,6 @@ class VoiceWindow(QWidget):
             old_thread.wait(2000)
 
     def _set_emotion(self, emotion):
-        """Set the emotion sprite. Empty string clears it."""
         if not emotion:
             self.emotion_label.clear()
             return
@@ -196,10 +208,8 @@ class VoiceWindow(QWidget):
 
     def on_mic_click(self):
         self.recognition_enabled = not self.recognition_enabled
-        if self.recognition_enabled:
-            self.mic_label.setPixmap(self.mic_pixmap_normal)
-        else:
-            self.mic_label.setPixmap(self.mic_pixmap_crossed)
+        # Icon appears only when the mic is OFF.
+        self.mic_label.setVisible(not self.recognition_enabled)
         self.speech_thread.set_enabled(self.recognition_enabled)
 
     def closeEvent(self, event):

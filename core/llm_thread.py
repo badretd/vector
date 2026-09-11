@@ -1,21 +1,131 @@
-"""Streaming Ollama client that parses the emotion prefix from the reply."""
-
+"""Streaming Ollama client that parses emotions from the reply."""
 import json
+import re
 
 import requests
 from PyQt5.QtCore import QThread, pyqtSignal
 
-from config import EMOTIONS, OLLAMA_MODEL, OLLAMA_URL, SYSTEM_PROMPT
+import config
+from config import EMOTIONS, OLLAMA_URL, SYSTEM_PROMPT
 
 
-class LLMThread(QThread):
-    """Streams tokens from Ollama and splits the leading emotion token off.
+# ---------------------------------------------------------------------------
+# Stream parser: extracts the leading emotion token and inline *Emotion* markers
+# ---------------------------------------------------------------------------
 
-    The model is instructed (see SYSTEM_PROMPT) to start every reply with
-    one canonical emotion word. We consume just enough of the stream to
-    identify that word, emit it, and then forward the rest as plain text.
+class _StreamParser:
+    """Turn a raw token stream into (visible_text, [emotions]).
+
+    * The very first word is expected to be one of EMOTIONS.
+    * Anywhere later, the model may insert *Happy* / *Sad* / ... to switch the
+      currently displayed emotion. Those markers are stripped from the text.
+    * Asterisk markers that don't match an emotion are left untouched.
     """
 
+    def __init__(self):
+        self._leading_done = False
+        self._buffer = ""
+        self._canonical = {e.lower(): e for e in EMOTIONS}
+        self._canonical["netral"] = "Neutral"
+
+    # -- public API -------------------------------------------------------
+
+    def feed(self, chunk: str):
+        self._buffer += chunk
+        emotions = []
+
+        if not self._leading_done:
+            done = self._try_leading(emotions)
+            if not done:
+                return "", emotions
+
+        text, more, tail = self._extract_markers(self._buffer)
+        self._buffer = tail
+        emotions.extend(more)
+        return text, emotions
+
+    def finalize(self):
+        emotions = []
+        text = self._buffer
+        self._buffer = ""
+
+        if not self._leading_done and text.strip():
+            parts = text.strip().split(None, 1)
+            emo = self._canonical.get(parts[0].strip(".,:;!?\"'`*_").lower())
+            if emo:
+                emotions.append(emo)
+                text = parts[1] if len(parts) > 1 else ""
+            else:
+                emotions.append("Neutral")
+
+        cleaned, more, tail = self._extract_markers(text)
+        emotions.extend(more)
+        return cleaned + tail, emotions
+
+    # -- internals --------------------------------------------------------
+
+    def _try_leading(self, emotions) -> bool:
+        stripped = self._buffer.lstrip()
+        m = re.match(r"[A-Za-z]+", stripped)
+        if not m:
+            if len(stripped) > 40:
+                emotions.append("Neutral")
+                self._leading_done = True
+                self._buffer = stripped
+                return True
+            return False
+
+        word = m.group(0)
+        end = m.end()
+
+        # Need a terminator to be sure the word is complete
+        if end < len(stripped):
+            emo = self._canonical.get(word.lower())
+            if emo and (stripped[end].isspace() or stripped[end] == "*"):
+                emotions.append(emo)
+                self._leading_done = True
+                self._buffer = stripped[end:].lstrip()
+                return True
+            if len(stripped) > 40:
+                emotions.append("Neutral")
+                self._leading_done = True
+                self._buffer = stripped
+                return True
+        elif len(stripped) > 40:
+            emotions.append("Neutral")
+            self._leading_done = True
+            self._buffer = stripped
+            return True
+
+        return False
+
+    def _extract_markers(self, text):
+        emotions = []
+        out = []
+        i, n = 0, len(text)
+        while i < n:
+            if text[i] == "*":
+                j = text.find("*", i + 1)
+                if j == -1:
+                    return "".join(out), emotions, text[i:]
+                inner = text[i + 1:j]
+                emo = self._canonical.get(inner.strip().lower())
+                if emo:
+                    emotions.append(emo)
+                else:
+                    out.append(text[i:j + 1])
+                i = j + 1
+            else:
+                out.append(text[i])
+                i += 1
+        return "".join(out), emotions, ""
+
+
+# ---------------------------------------------------------------------------
+# Qt thread
+# ---------------------------------------------------------------------------
+
+class LLMThread(QThread):
     emotion_received = pyqtSignal(str)
     chunk_received = pyqtSignal(str)
     finished_generating = pyqtSignal()
@@ -26,23 +136,33 @@ class LLMThread(QThread):
         self._cancelled = False
 
     def run(self):
-        full_prompt = SYSTEM_PROMPT + "\n\nUser: " + self.prompt + "\nAssistant:"
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": self.prompt},
+        ]
         try:
             response = requests.post(
-                OLLAMA_URL,
+                config.OLLAMA_URL,
                 json={
-                    "model": OLLAMA_MODEL,
-                    "prompt": full_prompt,
+                    "model": config.OLLAMA_MODEL,
+                    "messages": messages,
                     "stream": True,
-                    "options": {"temperature": 0.6},
+                    "options": {
+                        "temperature": 0.6,
+                        "stop": [
+                            "\nUser:", "\nuser:", "\nUSER:",
+                            "\nAssistant:", "\nassistant:", "\nASSISTANT:",
+                            "\nHuman:", "\nhuman:", "\nHUMAN:",
+                            "\nSystem:", "\nsystem:", "\nSYSTEM:",
+                        ],
+                    },
                 },
                 stream=True,
                 timeout=120,
             )
             response.raise_for_status()
 
-            emotion_parsed = False
-            buffer = ""
+            parser = _StreamParser()
 
             for line in response.iter_lines():
                 if self._cancelled:
@@ -54,42 +174,22 @@ class LLMThread(QThread):
                 except Exception:
                     continue
 
-                chunk = data.get("response", "")
+                msg = data.get("message") or {}
+                chunk = msg.get("content", "")
 
-                if not emotion_parsed:
-                    buffer += chunk
-
-                    # Wait until we have at least one whitespace to split
-                    # the leading word from the actual answer.
-                    if any(c.isspace() for c in buffer):
-                        parts = buffer.split(None, 1)
-                        first = parts[0] if parts else ""
-                        rest = parts[1] if len(parts) > 1 else ""
-
-                        canonical = self._normalize_emotion(first)
-                        if canonical is not None:
-                            self.emotion_received.emit(canonical)
-                            emotion_parsed = True
-                            if rest:
-                                self.chunk_received.emit(rest)
-                        elif len(buffer) > 40:
-                            # Model ignored the format — fall back to Neutral
-                            # rather than blocking the UI forever.
-                            self.emotion_received.emit("Neutral")
-                            emotion_parsed = True
-                            self.chunk_received.emit(buffer)
-                    elif len(buffer) > 40:
-                        self.emotion_received.emit("Neutral")
-                        emotion_parsed = True
-                        self.chunk_received.emit(buffer)
-                else:
-                    if chunk:
-                        self.chunk_received.emit(chunk)
+                if chunk:
+                    text, emotions = parser.feed(chunk)
+                    for e in emotions:
+                        self.emotion_received.emit(e)
+                    if text:
+                        self.chunk_received.emit(text)
 
                 if data.get("done"):
-                    if not emotion_parsed and buffer:
-                        self.emotion_received.emit("Neutral")
-                        self.chunk_received.emit(buffer)
+                    text, emotions = parser.finalize()
+                    for e in emotions:
+                        self.emotion_received.emit(e)
+                    if text:
+                        self.chunk_received.emit(text)
                     break
 
             response.close()
@@ -98,21 +198,6 @@ class LLMThread(QThread):
                 print(f"LLM error: {e}")
         finally:
             self.finished_generating.emit()
-
-    @staticmethod
-    def _normalize_emotion(word):
-        """Map an arbitrary token to a canonical emotion name, or None.
-
-        Tolerates surrounding punctuation and the historical "netral" typo.
-        """
-        w = word.strip().strip(".,:;!?\"'`*_")
-        w_lower = w.lower()
-        if w_lower == "netral":
-            return "Neutral"
-        for e in EMOTIONS:
-            if e.lower() == w_lower:
-                return e
-        return None
 
     def cancel(self):
         self._cancelled = True

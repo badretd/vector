@@ -24,3 +24,5 @@ Thumbs.db
 htmlcov/
 .env
 .env.local
+reset_app.py
+model/
