@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
 from config import (
     EMOTION_DISPLAY_SIZE,
     HINT_FONT_SIZE,
+    MIC_DISPLAY_SIZE,
     NORMAL_FONT_SIZE,
     PLACEHOLDER_FONT_SIZE,
     PLACEHOLDER_TEXT,
@@ -28,7 +29,7 @@ from config import (
 from core.i18n import t
 from core.llm_thread import LLMThread
 from core.speech_thread import SpeechThread
-from ui.assets import load_emotion_pixmaps, make_mic_pixmap, make_settings_pixmap
+from ui.assets import load_emotion_pixmaps, load_mic_off_pixmap, make_settings_pixmap
 from ui.widgets import ClickableLabel
 
 
@@ -62,6 +63,7 @@ class VoiceWindow(QWidget):
         self.emotion_label.setFixedHeight(EMOTION_DISPLAY_SIZE + 20)
         self.emotion_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.emotion_label.setPixmap(QPixmap())
+        self._current_emotion = None
 
         # --- center: text ---
         self.text_label = QLabel(self)
@@ -80,7 +82,7 @@ class VoiceWindow(QWidget):
         self.setLayout(main_layout)
 
         # --- microphone overlay (bottom center, visible when mic is OFF) ---
-        self.mic_pixmap_crossed = make_mic_pixmap(128, crossed=True).scaled(
+        self.mic_pixmap_crossed = load_mic_off_pixmap().scaled(
             self.MIC_ICON_SIZE, self.MIC_ICON_SIZE,
             Qt.KeepAspectRatio, Qt.SmoothTransformation,
         )
@@ -304,6 +306,10 @@ class VoiceWindow(QWidget):
             old_thread.wait(2000)
 
     def _set_emotion(self, emotion):
+        if emotion == self._current_emotion:
+            return
+        self._current_emotion = emotion
+
         if not emotion:
             self.emotion_label.clear()
             return
