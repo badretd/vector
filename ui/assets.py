@@ -80,3 +80,30 @@ def make_settings_pixmap(size=128):
 
     p.end()
     return pixmap
+
+def load_emotion_source_pixmaps():
+    """Load raw (unscaled) emotion sprites so callers can re-scale on zoom."""
+    pixmaps = {}
+    for name in EMOTIONS:
+        path = os.path.join(EMOTIONS_DIR, f"{name}.png")
+        if not os.path.exists(path):
+            print(f"[emotions] Missing file: {path}")
+            continue
+        src = QPixmap(path)
+        if src.isNull():
+            print(f"[emotions] Failed to load: {path}")
+            continue
+        pixmaps[name] = src
+    return pixmaps
+
+
+def load_mic_off_source_pixmap():
+    """Load raw (unscaled) mic_off.png so callers can re-scale on zoom."""
+    if not os.path.exists(MIC_OFF_PATH):
+        print(f"[mic] Missing file: {MIC_OFF_PATH}")
+        return None
+    src = QPixmap(MIC_OFF_PATH)
+    if src.isNull():
+        print(f"[mic] Failed to load: {MIC_OFF_PATH}")
+        return None
+    return src
