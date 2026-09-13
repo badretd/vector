@@ -76,11 +76,11 @@ class _OllamaWorker(QThread):
                     break
 
             response.close()
+            if not self._cancelled:
+                self.finished_ok.emit()
         except Exception as exc:
             if not self._cancelled:
                 self.failed.emit(str(exc))
-        finally:
-            self.finished_ok.emit()
 
     def cancel(self) -> None:
         self._cancelled = True
