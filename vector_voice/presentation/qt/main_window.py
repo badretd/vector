@@ -121,6 +121,20 @@ class VoiceWindow(QWidget):
         self.hint_label.setVisible(False)
         self._update_hint_font()
 
+        # ----- error label ---------------------------------------------
+        self.error_label = ClickableLabel(self)
+        self.error_label.setAlignment(Qt.AlignCenter)
+        self.error_label.setWordWrap(False)
+        self.error_label.setStyleSheet(
+            f"color: #ff4444; background-color: rgba(255, 68, 68, 0.15); "
+            f"padding: 8px 20px; border-radius: 6px; "
+            f"font-size: 10pt;"
+        )
+        self.error_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.error_label.setMinimumHeight(30)
+        self.error_label.clicked.connect(self._on_error_click)
+        self.error_label.setVisible(False)
+
         # ----- bind view model ----------------------------------------
         self._vm.placeholder_active_changed.connect(self._render_placeholder)
         self._vm.user_text_changed.connect(self._render_user_text)
@@ -130,6 +144,7 @@ class VoiceWindow(QWidget):
         self._vm.hint_visible_changed.connect(self._render_hint)
         self._vm.face_scale_changed.connect(self._render_zoom)
         self._vm.app_scale_changed.connect(self._render_zoom)
+        self._vm.error_message_changed.connect(self._render_error)
 
         # Initial render from the current view-model state.
         self._render_placeholder(self._vm.placeholder_active)
@@ -195,6 +210,15 @@ class VoiceWindow(QWidget):
         self.hint_label.setVisible(visible)
         if visible:
             self.hint_label.raise_()
+
+    def _render_error(self, message: str) -> None:
+        if message:
+            self.error_label.setText(message)
+            self.error_label.setVisible(True)
+            self.error_label.raise_()
+            self._reposition_overlays()
+        else:
+            self.error_label.setVisible(False)
 
     def _render_zoom(self, _value: float) -> None:
         self.avatar.set_scale(self._vm.face_scale * self._vm.app_scale)
@@ -274,6 +298,15 @@ class VoiceWindow(QWidget):
         if self._vm.hint_visible:
             self.hint_label.raise_()
 
+        if self._vm.error_message:
+            error_width = min(self.width() - 60, 800)
+            self.error_label.setFixedWidth(error_width)
+            # Position at bottom, above the window edge
+            ey = self.height() - self.error_label.height() - 30
+            ex = (self.width() - error_width) // 2
+            self.error_label.move(ex, ey)
+            self.error_label.raise_()
+
     # ------------------------------------------------------------------
     # Interactions
     # ------------------------------------------------------------------
@@ -321,6 +354,10 @@ class VoiceWindow(QWidget):
 
     def _on_user_edited(self) -> None:
         self._controller.on_user_edited(self.text_edit.get_text())
+
+    def _on_error_click(self) -> None:
+        """Clear error message when user clicks on it."""
+        self._vm.error_message = ""
 
     # ------------------------------------------------------------------
     # Settings menu

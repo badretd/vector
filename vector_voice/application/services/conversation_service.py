@@ -1,12 +1,16 @@
 """Streams a user prompt to the LLM and parses emotion tags."""
 from __future__ import annotations
 
+import traceback
 from typing import Callable
 
 from vector_voice.application.emotion_parser import EmotionParser
 from vector_voice.application.prompts import SYSTEM_PROMPT
 from vector_voice.domain.models import Emotion, Message, MessageRole
 from vector_voice.domain.ports import LlmProviderPort
+from vector_voice.infrastructure.logger import get_logger
+
+logger = get_logger("services.conversation")
 
 
 class ConversationService:
@@ -26,6 +30,7 @@ class ConversationService:
         on_chunk: Callable[[str], None],
         on_emotion: Callable[[Emotion], None],
         on_done: Callable[[], None],
+        on_error: Callable[[str], None] | None = None,
     ) -> None:
         """Start streaming. Callbacks are invoked from the provider thread."""
         self._parser = EmotionParser()
@@ -48,6 +53,19 @@ class ConversationService:
                 self._parser = None
             on_done()
 
+        def _handle_error(exc: Exception) -> None:
+            prompt_preview = prompt[:100] + "..." if len(prompt) > 100 else prompt
+            logger.error(
+                f"LLM conversation error | Model: {self._model} | "
+                f"Prompt: {prompt_preview} | Error: {exc} | "
+                f"Traceback: {traceback.format_exc()}"
+            )
+            if self._parser is not None:
+                self._parser = None
+            if on_error:
+                on_error(str(exc))
+            on_done()
+
         messages = [
             Message(role=MessageRole.SYSTEM, content=SYSTEM_PROMPT),
             Message(role=MessageRole.USER, content=prompt),
@@ -57,7 +75,7 @@ class ConversationService:
             messages=messages,
             on_chunk=_handle_chunk,
             on_done=_handle_done,
-            on_error=lambda _exc: _handle_done(),
+            on_error=_handle_error,
         )
 
     def cancel(self) -> None:

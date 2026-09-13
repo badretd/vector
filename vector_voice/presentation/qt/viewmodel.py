@@ -15,6 +15,7 @@ class MainViewModel(QObject):
     face_scale_changed = pyqtSignal(float)
     app_scale_changed = pyqtSignal(float)
     send_mode_changed = pyqtSignal(str)
+    error_message_changed = pyqtSignal(str)    # "" means no error
 
     def __init__(self) -> None:
         super().__init__()
@@ -28,6 +29,7 @@ class MainViewModel(QObject):
         self._face_scale = 3.0
         self._app_scale = 1.0
         self._send_mode = "enter"
+        self._error_message = ""
 
     # -- properties -------------------------------------------------------
 
@@ -140,3 +142,14 @@ class MainViewModel(QObject):
             return
         self._send_mode = value
         self.send_mode_changed.emit(value)
+
+    @property
+    def error_message(self) -> str:
+        return self._error_message
+
+    @error_message.setter
+    def error_message(self, value: str) -> None:
+        if value == self._error_message:
+            return
+        self._error_message = value
+        self.error_message_changed.emit(value)

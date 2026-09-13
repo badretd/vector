@@ -174,6 +174,7 @@ class MainWindowController(QObject):
     def _start_generation(self, prompt: str) -> None:
         self._vm.generating = True
         self._response_buffer = ""
+        self._vm.error_message = ""
 
         if self._restore_timer_mode:
             self._restore_timer_mode = False
@@ -187,6 +188,7 @@ class MainWindowController(QObject):
             on_chunk=self._on_llm_chunk,
             on_emotion=self._on_llm_emotion,
             on_done=self._on_llm_done,
+            on_error=self._on_llm_error,
         )
 
     def _on_llm_chunk(self, chunk: str) -> None:
@@ -203,11 +205,16 @@ class MainWindowController(QObject):
     def _on_llm_done(self) -> None:
         self._vm.generating = False
 
+    def _on_llm_error(self, error_msg: str) -> None:
+        self._vm.error_message = f"LLM Error: {error_msg}"
+        self._vm.emotion = ""
+
     def cancel_generation(self) -> None:
         self._conversation.cancel()
         self._vm.generating = False
         self._response_buffer = ""
         self._vm.response_text = ""
+        self._vm.error_message = ""
 
     def on_response_click(self) -> None:
         """Clear the answer and switch back to input mode."""
@@ -220,6 +227,7 @@ class MainWindowController(QObject):
         self._vosk_consumed = ""
         self._speech.reset()
         self._hide_hint()
+        self._vm.error_message = ""
 
     # ------------------------------------------------------------------
     # Microphone / settings
