@@ -48,6 +48,11 @@ class ConversationService:
                 self._parser = None
             on_done()
 
+        def _handle_error(_exc: Exception) -> None:
+            if self._parser is not None:
+                self._parser = None
+            on_done()
+
         messages = [
             Message(role=MessageRole.SYSTEM, content=SYSTEM_PROMPT),
             Message(role=MessageRole.USER, content=prompt),
@@ -57,7 +62,7 @@ class ConversationService:
             messages=messages,
             on_chunk=_handle_chunk,
             on_done=_handle_done,
-            on_error=lambda _exc: _handle_done(),
+            on_error=_handle_error,
         )
 
     def cancel(self) -> None:
