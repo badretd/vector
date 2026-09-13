@@ -26,3 +26,5 @@ htmlcov/
 .env.local
 reset_app.py
 model/
+scan.py
+project_map.txt

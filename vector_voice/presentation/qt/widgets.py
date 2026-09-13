@@ -1,14 +1,13 @@
-"""Reusable Qt widgets."""
+"""Small reusable Qt widgets."""
+from __future__ import annotations
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QFont, QTextCursor, QTextOption
 from PyQt5.QtWidgets import QFrame, QLabel, QSizePolicy, QTextEdit
 
-from config import NORMAL_FONT_SIZE
-
 
 class ClickableLabel(QLabel):
-    """QLabel that emits `clicked` on a left click and swallows the event."""
+    """QLabel that emits ``clicked`` on left click and swallows the event."""
 
     clicked = pyqtSignal()
 
@@ -21,19 +20,18 @@ class ClickableLabel(QLabel):
 
 
 class EditableTextEdit(QTextEdit):
-    """QTextEdit styled like a centered label, used to edit user text.
+    """Centered text editor behaving like a single-line label.
 
     Signals:
-        submitted   — Enter (without Shift) was pressed.
+        submitted   — Enter was pressed (Shift+Enter inserts a newline).
         user_edited — the user changed the text (not a programmatic update).
     """
 
     submitted = pyqtSignal()
     user_edited = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, font_size: int, parent=None) -> None:
         super().__init__(parent)
-
         self._suppress_edit = False
         self._syncing = False
 
@@ -45,7 +43,7 @@ class EditableTextEdit(QTextEdit):
         self.setAcceptRichText(False)
         self.setContextMenuPolicy(Qt.NoContextMenu)
         self.setTabChangesFocus(True)
-        self.setFont(QFont("Arial", NORMAL_FONT_SIZE))
+        self.setFont(QFont("Arial", font_size))
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setStyleSheet(
             "QTextEdit { color: #ffff00; background: transparent; border: none; }"
@@ -56,10 +54,7 @@ class EditableTextEdit(QTextEdit):
         )
         self.textChanged.connect(self._on_text_changed)
 
-    # -- public API -------------------------------------------------------
-
     def set_text(self, text: str, color: str = "#ffff00") -> None:
-        """Replace the text without emitting ``user_edited``."""
         self._suppress_edit = True
         try:
             self.setStyleSheet(
@@ -76,6 +71,11 @@ class EditableTextEdit(QTextEdit):
 
     def get_text(self) -> str:
         return self.toPlainText()
+
+    def apply_font_size(self, size: float) -> None:
+        f = QFont("Arial")
+        f.setPointSizeF(size)
+        self.setFont(f)
 
     # -- events -----------------------------------------------------------
 
@@ -95,7 +95,7 @@ class EditableTextEdit(QTextEdit):
 
     # -- internals --------------------------------------------------------
 
-    def _on_text_changed(self):
+    def _on_text_changed(self) -> None:
         if self._suppress_edit:
             return
         self.user_edited.emit()
@@ -105,8 +105,7 @@ class EditableTextEdit(QTextEdit):
             return
         QTimer.singleShot(0, self._sync_height)
 
-    def _sync_height(self):
-        """Auto-grow the widget to fit its content (used with vbox stretches)."""
+    def _sync_height(self) -> None:
         if self._syncing:
             return
         self._syncing = True

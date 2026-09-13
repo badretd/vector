@@ -1,7 +1,11 @@
-"""Tiny runtime i18n layer (RU / EN)."""
-_lang = "en"
+"""Dictionary-based translation service (RU / EN)."""
+from __future__ import annotations
 
-TEXTS = {
+from typing import Any
+
+from vector_voice.domain.ports import TranslationServicePort
+
+TEXTS: dict[str, dict[str, str]] = {
     "en": {
         "app_title": "Vector Voice",
         "language_prompt": "Choose interface language:",
@@ -38,8 +42,6 @@ TEXTS = {
         "no": "No",
         "error": "Error",
         "setup_cancelled": "Setup cancelled.",
-
-        # --- main window ---
         "placeholder_subtitle": "Start speaking",
         "send_hint": "Press Enter to send the text",
         "settings_tooltip": "Settings",
@@ -83,8 +85,6 @@ TEXTS = {
         "no": "Нет",
         "error": "Ошибка",
         "setup_cancelled": "Настройка отменена.",
-
-        # --- main window ---
         "placeholder_subtitle": "Начни говорить",
         "send_hint": "Нажми Enter чтобы отправить текст",
         "settings_tooltip": "Настройки",
@@ -95,20 +95,21 @@ TEXTS = {
 }
 
 
-def set_language(lang: str) -> None:
-    global _lang
-    _lang = lang if lang in TEXTS else "en"
+class DictTranslationService(TranslationServicePort):
+    def __init__(self, lang: str = "en") -> None:
+        self._lang = lang if lang in TEXTS else "en"
 
+    def set_language(self, code: str) -> None:
+        self._lang = code if code in TEXTS else "en"
 
-def get_language() -> str:
-    return _lang
+    def get_language(self) -> str:
+        return self._lang
 
-
-def t(key: str, **kwargs) -> str:
-    s = TEXTS.get(_lang, {}).get(key) or TEXTS["en"].get(key, key)
-    if kwargs:
-        try:
-            s = s.format(**kwargs)
-        except Exception:
-            pass
-    return s
+    def t(self, key: str, **kwargs: Any) -> str:
+        s = TEXTS.get(self._lang, {}).get(key) or TEXTS["en"].get(key, key)
+        if kwargs:
+            try:
+                s = s.format(**kwargs)
+            except Exception:
+                pass
+        return s
