@@ -24,7 +24,6 @@ Thumbs.db
 htmlcov/
 .env
 .env.local
-reset_app.py
 model/
 scan.py
 project_map.txt
