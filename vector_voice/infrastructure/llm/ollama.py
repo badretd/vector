@@ -6,6 +6,7 @@ inherit from the port because QObject uses its own metaclass.
 from __future__ import annotations
 
 import json
+import traceback
 from typing import Callable
 
 import requests
@@ -18,6 +19,9 @@ from vector_voice.application.constants import (
     LLM_TEMPERATURE,
 )
 from vector_voice.domain.models import Message
+from vector_voice.infrastructure.logger import get_logger
+
+logger = get_logger("llm.ollama")
 
 
 def _ollama_base(url: str) -> str:
@@ -80,6 +84,10 @@ class _OllamaWorker(QThread):
                 self.finished_ok.emit()
         except Exception as exc:
             if not self._cancelled:
+                logger.error(
+                    f"Ollama request failed | URL: {self._url} | Model: {self._model} | "
+                    f"Error: {exc} | Traceback: {traceback.format_exc()}"
+                )
                 self.failed.emit(str(exc))
 
     def cancel(self) -> None:
