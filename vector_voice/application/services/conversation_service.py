@@ -1,6 +1,7 @@
 """Streams a user prompt to the LLM and parses emotion tags."""
 from __future__ import annotations
 
+import logging
 import traceback
 from typing import Callable
 
@@ -10,7 +11,7 @@ from vector_voice.domain.models import Emotion, Message, MessageRole
 from vector_voice.domain.ports import LlmProviderPort
 from vector_voice.infrastructure.logger import get_logger
 
-logger = get_logger("services.conversation")
+logger = logging.getLogger(__name__)
 
 
 class ConversationService:

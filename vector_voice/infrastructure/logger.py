@@ -2,42 +2,52 @@
 from __future__ import annotations
 
 import logging
-import sys
 from pathlib import Path
 
 
-def setup_logger(name: str = "vector_voice") -> logging.Logger:
-    """Create and configure logger for Vector Voice.
+_LOGGER_NAME = "vector_voice"
+_configured = False
 
-    Logs are written to vector_voice.log in the project root.
+
+def setup_logger(log_dir: Path | None = None) -> logging.Logger:
+    """Configure the root vector_voice logger. Safe to call multiple times.
+
+    log_dir defaults to the project root, but is passed explicitly from
+    bootstrap so we never rely on a hardcoded path.
     """
-    logger = logging.getLogger(name)
+    global _configured
+    logger = logging.getLogger(_LOGGER_NAME)
 
-    # Avoid duplicate handlers if called multiple times
-    if logger.handlers:
+    if _configured and logger.handlers:
         return logger
 
     logger.setLevel(logging.INFO)
+    logger.propagate = False
 
-    # File handler - logs to project root
-    project_root = Path(__file__).resolve().parent.parent.parent
-    log_file = project_root / "vector_voice.log"
+    # Remove stale handlers (e.g. after reload in tests).
+    for h in list(logger.handlers):
+        logger.removeHandler(h)
+
+    target_dir = log_dir or Path.cwd()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    log_file = target_dir / "vector_voice.log"
 
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setLevel(logging.INFO)
-
-    # Format: timestamp | level | module | message
-    formatter = logging.Formatter(
+    file_handler.setFormatter(logging.Formatter(
         "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
-    file_handler.setFormatter(formatter)
-
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
     logger.addHandler(file_handler)
 
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.WARNING)
+    stream_handler.setFormatter(logging.Formatter("%(levelname)s | %(name)s | %(message)s"))
+    logger.addHandler(stream_handler)
+
+    _configured = True
     return logger
 
 
 def get_logger(module_name: str) -> logging.Logger:
-    """Get a logger for the specified module."""
-    return logging.getLogger(f"vector_voice.{module_name}")
+    return logging.getLogger(f"{_LOGGER_NAME}.{module_name}")

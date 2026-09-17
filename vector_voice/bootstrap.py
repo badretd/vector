@@ -18,6 +18,7 @@ from vector_voice.infrastructure.event_bus import SimpleEventBus
 from vector_voice.infrastructure.http_client import RequestsHttpClientFactory
 from vector_voice.infrastructure.llm.ollama import OllamaProvider
 from vector_voice.infrastructure.llm.registry import LlmProviderRegistry
+from vector_voice.infrastructure.logger import get_logger, setup_logger
 from vector_voice.infrastructure.settings_repository import JsonSettingsRepository
 from vector_voice.infrastructure.speech_adapter import VoskSpeechAdapter
 from vector_voice.infrastructure.translation_service import DictTranslationService
@@ -31,19 +32,37 @@ from vector_voice.presentation.qt.viewmodel import MainViewModel
 
 
 def _project_root() -> Path:
+    """Directory that contains the vector_voice package. Renaming the
+    project folder does not affect this."""
     return Path(__file__).resolve().parent.parent
+
+
+def _resolve_under_root(root: Path, configured: str | None, default: str) -> Path:
+    """Return a path strictly under ``root``.
+
+    If ``configured`` is absolute, only its final component is used.
+    This protects against stale absolute paths saved by older versions
+    or a wrong working directory.
+    """
+    name = Path(configured).name if configured else default
+    if not name:
+        name = default
+    return (root / name).resolve()
 
 
 def main() -> None:
     SetLogLevel(-1)
 
     project_root = _project_root()
+    setup_logger(project_root)
+    log = get_logger("bootstrap")
+    log.info("Starting Vector Voice from %s", project_root)
+
     assets_dir = project_root / "assets"
     emotions_dir = project_root / "emotions"
 
     app = create_application()
 
-    # --- Infrastructure -------------------------------------------------
     event_bus = SimpleEventBus()
     settings_repo = JsonSettingsRepository()
     settings = SettingsService(settings_repo, event_bus)
@@ -57,7 +76,6 @@ def main() -> None:
     ollama = OllamaProvider(http_factory, DEFAULT_OLLAMA_URL)
     providers.register(ollama)
 
-    # --- Setup / microphone resolution ---------------------------------
     setup = SetupService(
         settings=settings,
         translator=i18n,
@@ -80,18 +98,31 @@ def main() -> None:
             if device_index is None:
                 return
 
-    # --- Runtime overrides ---------------------------------------------
-    model_path = str(project_root / settings.get("vosk_model_dir", "model"))
+    # --- Runtime paths (never trust settings blindly) ------------------
+    model_dir = _resolve_under_root(
+        project_root,
+        settings.get("vosk_model_dir"),
+        "model",
+    )
+    if not vosk_installer.is_installed(str(model_dir)):
+        log.error("Vosk model missing at %s — speech recognition disabled", model_dir)
+        # Показываем пользователю явную ошибку до старта окна.
+        from PyQt5.QtWidgets import QMessageBox
+        QMessageBox.warning(
+            None,
+            i18n.t("vosk_model_missing_title"),
+            f"{i18n.t('vosk_model_missing_msg')}\n{model_dir}",
+        )
+        return
+
     actual_rate = audio.pick_samplerate(device_index)
 
-    # --- Application services ------------------------------------------
-    speech_adapter = VoskSpeechAdapter(model_path, device_index, actual_rate)
+    speech_adapter = VoskSpeechAdapter(str(model_dir), device_index, actual_rate)
     speech = SpeechService(speech_adapter)
 
     model_name = settings.get("ollama_model") or DEFAULT_OLLAMA_MODEL
     conversation = ConversationService(providers.default(), model_name)
 
-    # --- Presentation ---------------------------------------------------
     theme = QtThemeManager()
     assets = QtAssetRepository(assets_dir, emotions_dir)
     view_model = MainViewModel()
@@ -113,11 +144,7 @@ def main() -> None:
         theme=theme,
     )
 
-    # Start listening only after the window is fully wired so that no
-    # recognition event can be lost in the gap between VM updates and
-    # UI subscriptions.
     speech.start()
-
     window.show()
     sys.exit(app.exec_())
 

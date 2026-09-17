@@ -37,8 +37,6 @@ git clone https://github.com/badretd/vector.git Friend
 cd Friend
 ```
 
-The directory is expected to be named `Friend` (the project root used by `bootstrap.py` is the parent of the `vector_voice/` package).
-
 ### 2. Create a virtual environment
 
 ```bash
