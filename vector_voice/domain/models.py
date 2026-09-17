@@ -74,10 +74,13 @@ class AppSettings:
     setup_complete: bool = False
     send_mode: str = SendMode.ENTER.value
 
-    # Extension points (not yet wired to UI).
     llm_provider: str = "ollama"
     proxy_url: str | None = None
     theme_id: str = "default_dark"
+
+    openrouter_api_key: str | None = None
+    openrouter_model: str | None = None
+    openrouter_url: str | None = None
 
     # -- serialization ---------------------------------------------------
 

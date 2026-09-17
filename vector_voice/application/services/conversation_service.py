@@ -25,6 +25,12 @@ class ConversationService:
     def set_model(self, model: str) -> None:
         self._model = model
 
+    def set_provider(self, provider: LlmProviderPort, model: str) -> None:
+        """Swap the underlying provider at runtime (e.g. after settings change)."""
+        self.cancel()
+        self._provider = provider
+        self._model = model
+
     def send(
         self,
         prompt: str,

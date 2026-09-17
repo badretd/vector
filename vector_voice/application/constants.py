@@ -21,6 +21,13 @@ LLM_STOP_SEQUENCES = (
 DEFAULT_OLLAMA_URL = "http://localhost:11434/api/chat"
 DEFAULT_OLLAMA_MODEL = "phi3:3.8b-mini-4k-instruct-q4_K_M"
 
+# OpenRouter defaults (overridable via settings).
+DEFAULT_OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+DEFAULT_OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o-mini"
+OPENROUTER_REFERER = "https://github.com/vector-voice"
+OPENROUTER_TITLE = "Vector Voice"
+
 # Audio target rate (Vosk expects 16 kHz).
 TARGET_AUDIO_RATE = 16000
 AUDIO_CHUNK_SIZE = 4000

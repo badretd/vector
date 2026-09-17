@@ -6,7 +6,12 @@ from pathlib import Path
 
 from vosk import SetLogLevel
 
-from vector_voice.application.constants import DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL
+from vector_voice.application.constants import (
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_OLLAMA_URL,
+    DEFAULT_OPENROUTER_MODEL,
+    DEFAULT_OPENROUTER_URL,
+)
 from vector_voice.application.services.conversation_service import ConversationService
 from vector_voice.application.services.settings_service import SettingsService
 from vector_voice.application.services.setup_service import SetupService
@@ -17,6 +22,7 @@ from vector_voice.infrastructure.audio_adapter import SounddeviceAudioAdapter
 from vector_voice.infrastructure.event_bus import SimpleEventBus
 from vector_voice.infrastructure.http_client import RequestsHttpClientFactory
 from vector_voice.infrastructure.llm.ollama import OllamaProvider
+from vector_voice.infrastructure.llm.openrouter import OpenRouterProvider
 from vector_voice.infrastructure.llm.registry import LlmProviderRegistry
 from vector_voice.infrastructure.logger import get_logger, setup_logger
 from vector_voice.infrastructure.settings_repository import JsonSettingsRepository
@@ -26,28 +32,34 @@ from vector_voice.infrastructure.vosk_installer import ZipVoskModelInstaller
 from vector_voice.presentation.qt.app import create_application
 from vector_voice.presentation.qt.controller import MainWindowController
 from vector_voice.presentation.qt.main_window import VoiceWindow
+from vector_voice.presentation.qt.settings_dialog import SettingsDialog
 from vector_voice.presentation.qt.setup_wizard import QtSetupView
 from vector_voice.presentation.qt.theme import QtThemeManager
 from vector_voice.presentation.qt.viewmodel import MainViewModel
 
 
 def _project_root() -> Path:
-    """Directory that contains the vector_voice package. Renaming the
-    project folder does not affect this."""
     return Path(__file__).resolve().parent.parent
 
 
 def _resolve_under_root(root: Path, configured: str | None, default: str) -> Path:
-    """Return a path strictly under ``root``.
-
-    If ``configured`` is absolute, only its final component is used.
-    This protects against stale absolute paths saved by older versions
-    or a wrong working directory.
-    """
     name = Path(configured).name if configured else default
     if not name:
         name = default
     return (root / name).resolve()
+
+
+def _select_provider(providers: LlmProviderRegistry, settings: SettingsService):
+    provider_id = settings.get("llm_provider") or "ollama"
+    provider = providers.get(provider_id)
+    if provider is None or not provider.is_available():
+        provider = providers.get("ollama") or providers.default()
+        provider_id = provider.provider_id
+    if provider_id == "openrouter":
+        model = settings.get("openrouter_model") or DEFAULT_OPENROUTER_MODEL
+    else:
+        model = settings.get("ollama_model") or DEFAULT_OLLAMA_MODEL
+    return provider, model
 
 
 def main() -> None:
@@ -76,6 +88,13 @@ def main() -> None:
     ollama = OllamaProvider(http_factory, DEFAULT_OLLAMA_URL)
     providers.register(ollama)
 
+    openrouter = OpenRouterProvider(
+        http_factory,
+        api_key=settings.get("openrouter_api_key"),
+        url=settings.get("openrouter_url") or DEFAULT_OPENROUTER_URL,
+    )
+    providers.register(openrouter)
+
     setup = SetupService(
         settings=settings,
         translator=i18n,
@@ -98,7 +117,6 @@ def main() -> None:
             if device_index is None:
                 return
 
-    # --- Runtime paths (never trust settings blindly) ------------------
     model_dir = _resolve_under_root(
         project_root,
         settings.get("vosk_model_dir"),
@@ -106,7 +124,6 @@ def main() -> None:
     )
     if not vosk_installer.is_installed(str(model_dir)):
         log.error("Vosk model missing at %s — speech recognition disabled", model_dir)
-        # Показываем пользователю явную ошибку до старта окна.
         from PyQt5.QtWidgets import QMessageBox
         QMessageBox.warning(
             None,
@@ -120,8 +137,8 @@ def main() -> None:
     speech_adapter = VoskSpeechAdapter(str(model_dir), device_index, actual_rate)
     speech = SpeechService(speech_adapter)
 
-    model_name = settings.get("ollama_model") or DEFAULT_OLLAMA_MODEL
-    conversation = ConversationService(providers.default(), model_name)
+    provider, model_name = _select_provider(providers, settings)
+    conversation = ConversationService(provider, model_name)
 
     theme = QtThemeManager()
     assets = QtAssetRepository(assets_dir, emotions_dir)
@@ -136,12 +153,27 @@ def main() -> None:
         translator=i18n,
     )
 
+    def open_settings(parent_widget):
+        dialog = SettingsDialog(
+            settings=settings,
+            translator=i18n,
+            audio=audio,
+            providers=providers,
+            http_factory=http_factory,
+            conversation=conversation,
+            theme=theme,
+            project_root=project_root,
+            parent=parent_widget,
+        )
+        dialog.exec_()
+
     window = VoiceWindow(
         view_model=view_model,
         controller=controller,
         assets=assets,
         translator=i18n,
         theme=theme,
+        open_settings=open_settings,
     )
 
     speech.start()

@@ -1,14 +1,13 @@
 """Main window: centered avatar, bottom text, top-left mic icon, top-right menu."""
 from __future__ import annotations
 
+from typing import Callable
+
 from PyQt5.QtCore import QEvent, Qt
-from PyQt5.QtGui import QCursor, QFont
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QAction,
-    QActionGroup,
     QApplication,
     QLabel,
-    QMenu,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
@@ -33,6 +32,7 @@ class VoiceWindow(QWidget):
         assets: AssetRepositoryPort,
         translator: TranslationServicePort,
         theme: QtThemeManager,
+        open_settings: Callable[[QWidget], None],
     ) -> None:
         super().__init__()
         self._vm = view_model
@@ -40,6 +40,7 @@ class VoiceWindow(QWidget):
         self._assets = assets
         self._i18n = translator
         self._theme = theme
+        self._open_settings = open_settings
         tokens = theme.tokens()
 
         self.setWindowTitle(translator.t("app_title"))
@@ -106,7 +107,7 @@ class VoiceWindow(QWidget):
         self.settings_icon.setAlignment(Qt.AlignCenter)
         self.settings_icon.setStyleSheet("background-color: transparent;")
         self.settings_icon.setToolTip(translator.t("settings_tooltip"))
-        self.settings_icon.clicked.connect(self._open_settings_menu)
+        self.settings_icon.clicked.connect(self._on_settings_clicked)
         self.settings_icon.setVisible(False)
         self._update_settings_icon()
 
@@ -359,34 +360,8 @@ class VoiceWindow(QWidget):
         """Clear error message when user clicks on it."""
         self._vm.error_message = ""
 
-    # ------------------------------------------------------------------
-    # Settings menu
-    # ------------------------------------------------------------------
-
-    def _open_settings_menu(self) -> None:
-        menu = QMenu(self)
-        menu.setStyleSheet(self._theme.menu_stylesheet())
-
-        header = menu.addAction(self._i18n.t("settings_send_mode_header"))
-        header.setEnabled(False)
-        menu.addSeparator()
-
-        group = QActionGroup(menu)
-        group.setExclusive(True)
-
-        action_enter = QAction(self._i18n.t("settings_send_enter"), self, checkable=True)
-        action_enter.setChecked(self._vm.send_mode == "enter")
-        action_enter.triggered.connect(lambda: self._controller.set_send_mode("enter"))
-        group.addAction(action_enter)
-        menu.addAction(action_enter)
-
-        action_timer = QAction(self._i18n.t("settings_send_timer"), self, checkable=True)
-        action_timer.setChecked(self._vm.send_mode == "timer")
-        action_timer.triggered.connect(lambda: self._controller.set_send_mode("timer"))
-        group.addAction(action_timer)
-        menu.addAction(action_timer)
-
-        menu.exec_(QCursor.pos())
+    def _on_settings_clicked(self) -> None:
+        self._open_settings(self)
 
     # ------------------------------------------------------------------
     # Close

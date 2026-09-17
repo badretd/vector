@@ -58,3 +58,28 @@ class QtThemeManager:
             f"QMenu::item:disabled {{ color: {t.menu_disabled_fg}; }}"
             f"QMenu::separator {{ height: 1px; background: {t.menu_border}; margin: 4px 8px; }}"
         )
+
+    def dialog_stylesheet(self) -> str:
+        t = self._tokens
+        return (
+            f"QDialog {{ background-color: {t.menu_bg}; color: {t.menu_fg}; }}"
+            f"QLabel {{ color: {t.menu_fg}; background: transparent; }}"
+            f"QLineEdit {{ background-color: #2a2a2a; color: {t.menu_fg}; "
+            f"border: 1px solid {t.menu_border}; border-radius: 4px; "
+            f"padding: 4px 8px; selection-background-color: #444444; }}"
+            f"QLineEdit:focus {{ border: 1px solid #666666; }}"
+            f"QComboBox {{ background-color: #2a2a2a; color: {t.menu_fg}; "
+            f"border: 1px solid {t.menu_border}; border-radius: 4px; "
+            f"padding: 4px 8px; }}"
+            f"QComboBox:focus {{ border: 1px solid #666666; }}"
+            f"QComboBox::drop-down {{ border: none; width: 20px; }}"
+            f"QComboBox QAbstractItemView {{ background-color: {t.menu_bg}; "
+            f"color: {t.menu_fg}; selection-background-color: {t.menu_selected_bg}; "
+            f"border: 1px solid {t.menu_border}; }}"
+            f"QPushButton {{ background-color: #2a2a2a; color: {t.menu_fg}; "
+            f"border: 1px solid {t.menu_border}; border-radius: 4px; "
+            f"padding: 6px 16px; }}"
+            f"QPushButton:hover {{ background-color: {t.menu_selected_bg}; }}"
+            f"QPushButton:pressed {{ background-color: #444444; }}"
+            f"QPushButton:disabled {{ color: {t.menu_disabled_fg}; }}"
+        )

@@ -48,6 +48,31 @@ TEXTS: dict[str, dict[str, str]] = {
         "settings_send_mode_header": "Send mode",
         "settings_send_enter": "Send by Enter",
         "settings_send_timer": "Send by timer (3 sec)",
+        "settings_title": "Settings",
+        "settings_language": "Interface language",
+        "settings_llm_provider": "LLM provider",
+        "settings_ollama_model": "Ollama model",
+        "settings_openrouter_key": "OpenRouter API key",
+        "settings_openrouter_model": "OpenRouter model",
+        "settings_proxy": "Proxy URL",
+        "settings_proxy_placeholder": "http://user:pass@host:port (leave empty to disable)",
+        "settings_clear_key": "Clear",
+        "settings_key_set": "Current key: {masked}",
+        "settings_key_unset": "No key set",
+        "settings_factory_reset": "Factory reset",
+        "settings_factory_reset_confirm": (
+            "Reset Vector Voice to factory settings?\n\n"
+            "The application will close and the reset script will run. "
+            "You will see the first-time setup wizard on next launch."
+        ),
+        "settings_saved": "Settings saved.",
+        "settings_restart_required": (
+            "Language and microphone changes take effect after restart."
+        ),
+        "settings_openrouter_requires_key": (
+            "OpenRouter is selected but no API key is set."
+        ),
+        "settings_reset_failed": "Failed to launch reset script:",
     },
     "ru": {
         "app_title": "Vector Voice",
@@ -91,6 +116,31 @@ TEXTS: dict[str, dict[str, str]] = {
         "settings_send_mode_header": "Способ отправки",
         "settings_send_enter": "Отправка по Enter",
         "settings_send_timer": "Отправка по таймеру (3 сек)",
+        "settings_title": "Настройки",
+        "settings_language": "Язык интерфейса",
+        "settings_llm_provider": "LLM-провайдер",
+        "settings_ollama_model": "Модель Ollama",
+        "settings_openrouter_key": "API-ключ OpenRouter",
+        "settings_openrouter_model": "Модель OpenRouter",
+        "settings_proxy": "Прокси",
+        "settings_proxy_placeholder": "http://user:pass@host:port (пусто — без прокси)",
+        "settings_clear_key": "Очистить",
+        "settings_key_set": "Текущий ключ: {masked}",
+        "settings_key_unset": "Ключ не задан",
+        "settings_factory_reset": "Сброс до заводских",
+        "settings_factory_reset_confirm": (
+            "Сбросить Vector Voice до заводских настроек?\n\n"
+            "Приложение закроется и запустится скрипт сброса. "
+            "При следующем запуске появится мастер первоначальной настройки."
+        ),
+        "settings_saved": "Настройки сохранены.",
+        "settings_restart_required": (
+            "Смена языка и микрофона вступит в силу после перезапуска."
+        ),
+        "settings_openrouter_requires_key": (
+            "Выбран OpenRouter, но API-ключ не задан."
+        ),
+        "settings_reset_failed": "Не удалось запустить скрипт сброса:",
     },
 }
 
