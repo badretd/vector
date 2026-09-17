@@ -73,6 +73,14 @@ TEXTS: dict[str, dict[str, str]] = {
             "OpenRouter is selected but no API key is set."
         ),
         "settings_reset_failed": "Failed to launch reset script:",
+        "settings_memory_header": "Memory",
+        "settings_memory_enabled": "Remember conversations",
+        "settings_memory_count": "{count} item(s) stored",
+        "settings_memory_clear": "Clear memory",
+        "settings_memory_clear_confirm": (
+            "Permanently delete all stored memories?\n\n"
+            "Application settings are not affected."
+        ),
     },
     "ru": {
         "app_title": "Vector Voice",
@@ -141,6 +149,14 @@ TEXTS: dict[str, dict[str, str]] = {
             "Выбран OpenRouter, но API-ключ не задан."
         ),
         "settings_reset_failed": "Не удалось запустить скрипт сброса:",
+        "settings_memory_header": "Память",
+        "settings_memory_enabled": "Запоминать разговоры",
+        "settings_memory_count": "Сохранено записей: {count}",
+        "settings_memory_clear": "Очистить память",
+        "settings_memory_clear_confirm": (
+            "Полностью удалить всю сохранённую память?\n\n"
+            "Настройки приложения это не затрагивает."
+        ),
     },
 }
 

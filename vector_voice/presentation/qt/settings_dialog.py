@@ -8,6 +8,7 @@ from pathlib import Path
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -19,6 +20,8 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QVBoxLayout,
 )
+
+from vector_voice.application.services.memory_service import MemoryService
 
 from vector_voice.application.constants import (
     DEFAULT_OLLAMA_MODEL,
@@ -53,6 +56,7 @@ class SettingsDialog(QDialog):
         conversation: ConversationService,
         theme: QtThemeManager,
         project_root: Path,
+        memory: MemoryService,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -64,6 +68,7 @@ class SettingsDialog(QDialog):
         self._conversation = conversation
         self._theme = theme
         self._root = project_root
+        self._memory = memory
         self._clear_key_flag = False
 
         self.setWindowTitle(translator.t("settings_title"))
@@ -155,6 +160,29 @@ class SettingsDialog(QDialog):
         self.proxy_edit.setPlaceholderText(self._i18n.t("settings_proxy_placeholder"))
         form.addRow(self._make_label(self._i18n.t("settings_proxy")), self.proxy_edit)
 
+        memory_box = QVBoxLayout()
+        memory_box.setContentsMargins(0, 0, 0, 0)
+        memory_box.setSpacing(4)
+
+        self.memory_check = QCheckBox(self._i18n.t("settings_memory_enabled"))
+        memory_box.addWidget(self.memory_check)
+
+        memory_row = QHBoxLayout()
+        memory_row.setContentsMargins(0, 0, 0, 0)
+        memory_row.setSpacing(6)
+        self.memory_info = QLabel()
+        self.memory_info.setStyleSheet("color: #888888; font-size: 9pt;")
+        memory_row.addWidget(self.memory_info, 1)
+        self.memory_clear_btn = QPushButton(self._i18n.t("settings_memory_clear"))
+        self.memory_clear_btn.clicked.connect(self._on_clear_memory)
+        memory_row.addWidget(self.memory_clear_btn)
+        memory_box.addLayout(memory_row)
+
+        form.addRow(
+            self._make_label(self._i18n.t("settings_memory_header")),
+            memory_box,
+        )
+
         root.addLayout(form)
         root.addStretch(1)
 
@@ -200,6 +228,9 @@ class SettingsDialog(QDialog):
         self._populate_openrouter_models(s.openrouter_model)
         self._update_key_display(s.openrouter_api_key)
         self.proxy_edit.setText(s.proxy_url or "")
+
+        self.memory_check.setChecked(bool(s.memory_enabled))
+        self._update_memory_info()
 
     def _populate_mics(self, selected_index: int | None) -> None:
         self.mic_combo.clear()
@@ -309,6 +340,8 @@ class SettingsDialog(QDialog):
         self._settings.set("proxy_url", proxy)
         self._http.set_proxy(proxy)
 
+        self._settings.set("memory_enabled", self.memory_check.isChecked())
+
         self._settings.save()
 
         self._apply_runtime_changes(provider_id)
@@ -337,6 +370,36 @@ class SettingsDialog(QDialog):
             model = self._settings.get("ollama_model") or DEFAULT_OLLAMA_MODEL
 
         self._conversation.set_provider(provider, model)
+
+    # ------------------------------------------------------------------
+    # Memory
+    # ------------------------------------------------------------------
+
+    def _update_memory_info(self) -> None:
+        try:
+            count = self._memory.count()
+        except Exception:
+            count = 0
+        self.memory_info.setText(
+            self._i18n.t("settings_memory_count", count=count)
+        )
+
+    def _on_clear_memory(self) -> None:
+        reply = QMessageBox.question(
+            self,
+            self._i18n.t("settings_memory_clear"),
+            self._i18n.t("settings_memory_clear_confirm"),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            self._memory.clear()
+        except Exception as exc:
+            QMessageBox.critical(self, self._i18n.t("error"), str(exc))
+            return
+        self._update_memory_info()
 
     # ------------------------------------------------------------------
     # Factory reset

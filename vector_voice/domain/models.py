@@ -74,6 +74,11 @@ class AppSettings:
     setup_complete: bool = False
     send_mode: str = SendMode.ENTER.value
 
+    memory_enabled: bool = True
+    memory_db_path: str | None = None
+    memory_recent_turns: int = 8
+    memory_retrieval_limit: int = 5
+
     llm_provider: str = "ollama"
     proxy_url: str | None = None
     theme_id: str = "default_dark"
@@ -91,3 +96,22 @@ class AppSettings:
     def from_dict(cls, data: dict[str, Any]) -> "AppSettings":
         known = set(cls.__dataclass_fields__)  # type: ignore[attr-defined]
         return cls(**{k: v for k, v in data.items() if k in known})
+
+class MemoryKind(str, Enum):
+    """Categories of long-term memory items."""
+
+    FACT = "fact"
+    PREFERENCE = "preference"
+    NOTE = "note"
+
+
+@dataclass(frozen=True)
+class MemoryItem:
+    """A single long-term memory entry."""
+
+    id: int | None
+    kind: MemoryKind
+    text: str
+    created_at: str
+    last_used_at: str | None = None
+    importance: float = 0.5
