@@ -11,7 +11,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Protocol, runtime_checkable
 
-from vector_voice.domain.models import AppSettings, Message, MicrophoneInfo
+from vector_voice.domain.models import (
+    AppSettings,
+    MemoryItem,
+    MemoryKind,
+    Message,
+    MessageRole,
+    MicrophoneInfo,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -163,3 +170,33 @@ class ThemeManagerPort(ABC):
 
     @abstractmethod
     def tokens(self) -> dict[str, Any]: ...
+
+# ---------------------------------------------------------------------------
+# Long-term memory
+# ---------------------------------------------------------------------------
+
+class MemoryRepositoryPort(ABC):
+    """Storage for conversation history and explicit long-term facts."""
+
+    @abstractmethod
+    def add_message(self, role: MessageRole, content: str) -> None: ...
+
+    @abstractmethod
+    def recent_messages(self, limit: int = 8) -> list[Message]: ...
+
+    @abstractmethod
+    def add_memory(self, item: MemoryItem) -> MemoryItem: ...
+
+    @abstractmethod
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+        kinds: set[MemoryKind] | None = None,
+    ) -> list[MemoryItem]: ...
+
+    @abstractmethod
+    def clear(self) -> None: ...
+
+    @abstractmethod
+    def count(self) -> int: ...

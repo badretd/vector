@@ -13,6 +13,7 @@ from vector_voice.application.constants import (
     DEFAULT_OPENROUTER_URL,
 )
 from vector_voice.application.services.conversation_service import ConversationService
+from vector_voice.application.services.memory_service import MemoryService
 from vector_voice.application.services.settings_service import SettingsService
 from vector_voice.application.services.setup_service import SetupService
 from vector_voice.application.services.speech_service import SpeechService
@@ -25,6 +26,9 @@ from vector_voice.infrastructure.llm.ollama import OllamaProvider
 from vector_voice.infrastructure.llm.openrouter import OpenRouterProvider
 from vector_voice.infrastructure.llm.registry import LlmProviderRegistry
 from vector_voice.infrastructure.logger import get_logger, setup_logger
+from vector_voice.infrastructure.memory.sqlite_memory_repository import (
+    SqliteMemoryRepository,
+)
 from vector_voice.infrastructure.settings_repository import JsonSettingsRepository
 from vector_voice.infrastructure.speech_adapter import VoskSpeechAdapter
 from vector_voice.infrastructure.translation_service import DictTranslationService
@@ -137,8 +141,15 @@ def main() -> None:
     speech_adapter = VoskSpeechAdapter(str(model_dir), device_index, actual_rate)
     speech = SpeechService(speech_adapter)
 
+    # -- long-term memory ------------------------------------------------
+    # Lives in the OS data directory, so a factory reset (reset_app.py)
+    # never wipes it. See SqliteMemoryRepository.memory_db_path().
+    memory_repo = SqliteMemoryRepository(settings.get("memory_db_path"))
+    memory = MemoryService(memory_repo, settings)
+    log.info("Memory store ready at %s", memory_repo._db_path)
+
     provider, model_name = _select_provider(providers, settings)
-    conversation = ConversationService(provider, model_name)
+    conversation = ConversationService(provider, model_name, memory=memory)
 
     theme = QtThemeManager()
     assets = QtAssetRepository(assets_dir, emotions_dir)
@@ -163,6 +174,7 @@ def main() -> None:
             conversation=conversation,
             theme=theme,
             project_root=project_root,
+            memory=memory,
             parent=parent_widget,
         )
         dialog.exec_()

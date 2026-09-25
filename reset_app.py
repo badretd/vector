@@ -5,6 +5,9 @@ reset_app.py — reset Vector Voice to factory settings.
 Removes the user settings file. Optionally wipes the extracted Vosk model
 and log files. Uses only the standard library; does NOT import the package
 so that it can run even if dependencies are broken.
+
+Long-term memory (the SQLite database) is intentionally NOT touched — it
+lives in the OS data directory and must survive a factory reset.
 """
 from __future__ import annotations
 
